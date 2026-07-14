@@ -1,11 +1,15 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 
+	_ "github.com/lib/pq"
+
 	"github.com/KriKri98/gator/internal/cli"
 	"github.com/KriKri98/gator/internal/config"
+	"github.com/KriKri98/gator/internal/database"
 )
 
 func main() {
@@ -13,12 +17,18 @@ func main() {
 	if err != nil {
 		fmt.Printf("%v\n", err)
 	}
+
 	state := cli.Status{}
 	state.Cfg = &cfg
+
+	db, err := sql.Open("postgres", state.Cfg.DB_url)
+	dbQueries := database.New(db)
+	state.DB = dbQueries
 
 	commands := cli.Commands{}
 	commands.Command = make(map[string]func(*cli.Status, cli.Command) error)
 	commands.Register("login", cli.HandlerLogin)
+	commands.Register("register", cli.RegisterHandler)
 
 	args := os.Args
 
