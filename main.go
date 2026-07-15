@@ -28,7 +28,8 @@ func main() {
 	commands := cli.Commands{}
 	commands.Command = make(map[string]func(*cli.Status, cli.Command) error)
 	commands.Register("login", cli.HandlerLogin)
-	commands.Register("register", cli.RegisterHandler)
+	commands.Register("register", cli.HandlerRegister)
+	commands.Register("reset", cli.HandlerReset)
 
 	args := os.Args
 

@@ -56,7 +56,7 @@ func HandlerLogin(s *Status, cmd Command) error {
 	return nil
 }
 
-func RegisterHandler(s *Status, cmd Command) error {
+func HandlerRegister(s *Status, cmd Command) error {
 	if len(cmd.Args) == 0 {
 		return fmt.Errorf("no username given")
 	}
@@ -78,5 +78,14 @@ func RegisterHandler(s *Status, cmd Command) error {
 	}
 	fmt.Printf("created user: %v", user)
 
+	return nil
+}
+
+func HandlerReset(s *Status, cmd Command) error {
+	err := s.DB.DeleteUsers(context.Background())
+	if err != nil {
+		fmt.Printf("%v", err)
+		os.Exit(1)
+	}
 	return nil
 }
