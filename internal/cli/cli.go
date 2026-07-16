@@ -89,3 +89,18 @@ func HandlerReset(s *Status, cmd Command) error {
 	}
 	return nil
 }
+
+func HandlerGetUsers(s *Status, cmd Command) error {
+	users, err := s.DB.GetUsers(context.Background())
+	if err != nil {
+		return err
+	}
+	for _, user := range users {
+		if user.Name == s.Cfg.Current_user_name {
+			fmt.Printf("* %v (current)\n", user.Name)
+		} else {
+			fmt.Printf("* %v\n", user.Name)
+		}
+	}
+	return nil
+}
