@@ -2,7 +2,11 @@ package cli
 
 import (
 	"context"
+	"encoding/xml"
 	"fmt"
+	"html"
+	"io"
+	"net/http"
 	"os"
 	"time"
 
@@ -19,6 +23,22 @@ type Status struct {
 type Command struct {
 	Name string
 	Args []string
+}
+
+type RSSFeed struct {
+	Channel struct {
+		Title       string    `xml:"title"`
+		Link        string    `xml:"link"`
+		Description string    `xml:"description"`
+		Item        []RSSItem `xml:"item"`
+	} `xml:"channel"`
+}
+
+type RSSItem struct {
+	Title       string `xml:"title"`
+	Link        string `xml:"link"`
+	Description string `xml:"description"`
+	PubDate     string `xml:"pubDate"`
 }
 
 type Commands struct {
@@ -102,5 +122,80 @@ func HandlerGetUsers(s *Status, cmd Command) error {
 			fmt.Printf("* %v\n", user.Name)
 		}
 	}
+	return nil
+}
+
+func fetchFeed(ctx context.Context, feedUrl string) (*RSSFeed, error) {
+	feed := &RSSFeed{}
+	req, err := http.NewRequestWithContext(ctx, "GET", feedUrl, http.NoBody)
+	if err != nil {
+		return feed, err
+	}
+
+	req.Header.Set("User-Agent", "gator")
+	c := http.Client{}
+	res, err := c.Do(req)
+	if err != nil {
+		return feed, err
+	}
+	defer res.Body.Close()
+
+	b, err := io.ReadAll(res.Body)
+	if err != nil {
+		return feed, err
+	}
+
+	err = xml.Unmarshal(b, feed)
+	if err != nil {
+		return feed, err
+	}
+
+	feed.Channel.Description = html.UnescapeString(feed.Channel.Description)
+	feed.Channel.Title = html.UnescapeString(feed.Channel.Title)
+	for i := range feed.Channel.Item {
+		feed.Channel.Item[i].Description = html.UnescapeString(feed.Channel.Item[i].Description)
+		feed.Channel.Item[i].Title = html.UnescapeString(feed.Channel.Item[i].Title)
+	}
+
+	return feed, nil
+}
+
+func HandlerAgg(s *Status, cmd Command) error {
+	feed, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(feed)
+	return nil
+}
+
+func HandlerAddFeed(s *Status, cmd Command) error {
+	if len(cmd.Args) < 2 {
+		return fmt.Errorf("not enough arguments given")
+	}
+	name := cmd.Args[0]
+	url := cmd.Args[1]
+
+	user, err := s.DB.GetUser(context.Background(), s.Cfg.Current_user_name)
+	if err != nil {
+		return err
+	}
+
+	feed := database.CreateFeedParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Name:      name,
+		Url:       url,
+		UserID:    user.ID,
+	}
+
+	err = s.DB.CreateFeed(context.Background(), feed)
+	if err != nil {
+		return err
+	}
+	fmt.Println(feed)
+
 	return nil
 }
