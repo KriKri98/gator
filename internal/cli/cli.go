@@ -199,3 +199,22 @@ func HandlerAddFeed(s *Status, cmd Command) error {
 
 	return nil
 }
+
+func HandlerAllFeeds(s *Status, cmd Command) error {
+	feeds, err := s.DB.GetFeeds(context.Background())
+	if err != nil {
+		return err
+	}
+
+	for _, feed := range feeds {
+		user, err := s.DB.GetUserName(context.Background(), feed.UserID)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("name: %v\n", feed.Name)
+		fmt.Printf("url: %v\n", feed.Url)
+		fmt.Printf("user: %v\n", user.Name)
+	}
+
+	return nil
+}

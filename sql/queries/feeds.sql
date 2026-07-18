@@ -9,3 +9,6 @@ VALUES (
     $6
 );
 
+-- name: GetFeeds :many
+SELECT * FROM feeds;
+
