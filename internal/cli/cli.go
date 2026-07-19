@@ -57,6 +57,18 @@ func (c *Commands) Register(name string, f func(*Status, Command) error) {
 	c.Command[name] = f
 }
 
+func MiddlewareLoggedIn(handler func(s *Status, cmd Command, user database.User) error) func(s *Status, cmd Command) error {
+	return func(s *Status, cmd Command) error {
+		user, err := s.DB.GetUser(context.Background(), s.Cfg.Current_user_name)
+		if err != nil {
+			return err
+		}
+
+		return handler(s, cmd, user)
+	}
+
+}
+
 func HandlerLogin(s *Status, cmd Command) error {
 	if len(cmd.Args) == 0 {
 		return fmt.Errorf("no username given")
@@ -170,17 +182,12 @@ func HandlerAgg(s *Status, cmd Command) error {
 	return nil
 }
 
-func HandlerAddFeed(s *Status, cmd Command) error {
+func HandlerAddFeed(s *Status, cmd Command, user database.User) error {
 	if len(cmd.Args) < 2 {
 		return fmt.Errorf("not enough arguments given")
 	}
 	name := cmd.Args[0]
 	url := cmd.Args[1]
-
-	user, err := s.DB.GetUser(context.Background(), s.Cfg.Current_user_name)
-	if err != nil {
-		return err
-	}
 
 	feed := database.CreateFeedParams{
 		ID:        uuid.New(),
@@ -191,7 +198,15 @@ func HandlerAddFeed(s *Status, cmd Command) error {
 		UserID:    user.ID,
 	}
 
-	err = s.DB.CreateFeed(context.Background(), feed)
+	err := s.DB.CreateFeed(context.Background(), feed)
+	if err != nil {
+		return err
+	}
+	follow := Command{
+		Name: "follow",
+		Args: cmd.Args[1:],
+	}
+	err = HandlerFollow(s, follow, user)
 	if err != nil {
 		return err
 	}
@@ -216,5 +231,42 @@ func HandlerAllFeeds(s *Status, cmd Command) error {
 		fmt.Printf("user: %v\n", user.Name)
 	}
 
+	return nil
+}
+
+func HandlerFollow(s *Status, cmd Command, user database.User) error {
+	if len(cmd.Args) < 1 {
+		return fmt.Errorf("no URL given")
+	}
+	feed, err := s.DB.GetFeedsURL(context.Background(), cmd.Args[0])
+	if err != nil {
+		return err
+	}
+
+	feedToFollow := database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    user.ID,
+		FeedID:    feed.ID,
+	}
+	followedFeed, err := s.DB.CreateFeedFollow(context.Background(), feedToFollow)
+
+	fmt.Printf("username: %v\n", followedFeed.UserName)
+	fmt.Printf("feedname: %v\n", followedFeed.FeedName)
+
+	return nil
+}
+
+func HandlerFollowing(s *Status, cmd Command, user database.User) error {
+	feeds, err := s.DB.GetFeedFollowForUser(context.Background(), user.ID)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("user %v is following these feeds:\n", user.Name)
+	for _, feed := range feeds {
+		fmt.Printf("\t%v\n", feed.FeedName)
+	}
 	return nil
 }
