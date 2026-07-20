@@ -210,7 +210,6 @@ func HandlerAddFeed(s *Status, cmd Command, user database.User) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(feed)
 
 	return nil
 }
@@ -269,4 +268,19 @@ func HandlerFollowing(s *Status, cmd Command, user database.User) error {
 		fmt.Printf("\t%v\n", feed.FeedName)
 	}
 	return nil
+}
+
+func HandlerUnfollow(s *Status, cmd Command, user database.User) error {
+	if len(cmd.Args) < 1 {
+		return fmt.Errorf("no feed url given")
+	}
+	feed, err := s.DB.GetFeedsURL(context.Background(), cmd.Args[0])
+	if err != nil {
+		return err
+	}
+	unfollow := database.DeleteFeedFollowParams{
+		UserID: user.ID,
+		FeedID: feed.ID,
+	}
+	return s.DB.DeleteFeedFollow(context.Background(), unfollow)
 }
