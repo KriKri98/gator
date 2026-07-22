@@ -2,17 +2,21 @@ package cli
 
 import (
 	"context"
+	"database/sql"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"html"
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/KriKri98/gator/internal/config"
 	"github.com/KriKri98/gator/internal/database"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 type Status struct {
@@ -311,11 +315,73 @@ func scrapeFeeds(s *Status, user database.User) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("feed: %v\n", feedFetched.Channel.Title)
-	for _, fetchedFeed := range feedFetched.Channel.Item {
-		fmt.Printf("%v\n", fetchedFeed.Title)
+
+	for _, item := range feedFetched.Channel.Item {
+
+		description := sql.NullString{
+			String: item.Description,
+			Valid:  true,
+		}
+		timePub, _ := time.Parse("RFC1123", item.PubDate)
+
+		publishedAt := sql.NullTime{
+			Time:  timePub,
+			Valid: true,
+		}
+		timeNow := time.Now()
+		savePost := database.CreatePostParams{
+			ID:          uuid.New(),
+			CreatedAt:   timeNow,
+			UpdatedAt:   timeNow,
+			Title:       item.Title,
+			Url:         item.Link,
+			Description: description,
+			PublishedAt: publishedAt,
+			FeedID:      feed.ID,
+		}
+		err = s.DB.CreatePost(context.Background(), savePost)
+		if err != nil {
+			pqErr := new(pq.Error)
+			if errors.As(err, &pqErr) {
+				if pqErr.Code == "23505" {
+					continue
+				} else {
+					return err
+				}
+			}
+		}
 	}
-	fmt.Printf("\n")
+
+	return nil
+}
+
+func HandlerBrowse(s *Status, cmd Command, user database.User) error {
+	var limit int32
+	if len(cmd.Args) == 0 {
+		limit = 2
+	} else {
+		limitArgs, err := strconv.Atoi(cmd.Args[0])
+		if err != nil {
+			return err
+		}
+		limit = int32(limitArgs)
+	}
+	getPosts := database.GetPostsForUserParams{
+		UserID: user.ID,
+		Limit:  limit,
+	}
+
+	posts, err := s.DB.GetPostsForUser(context.Background(), getPosts)
+	if err != nil {
+		return err
+	}
+
+	for _, post := range posts {
+		fmt.Printf("%v\n", post.Title)
+		fmt.Printf("%v\n", post.Description)
+		fmt.Printf("%v\n", post.Url)
+		fmt.Printf("\n")
+	}
 
 	return nil
 }
